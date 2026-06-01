@@ -73,3 +73,4 @@ def query(req: QueryRequest):
         )
 
     return QueryResponse(question=question, results=items)
+
