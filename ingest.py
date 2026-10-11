@@ -5,16 +5,16 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 from pathlib import Path
 
-# Config
-VAULT_PATH = "/mnt/c/Users/user/obsidian-vault"
-CHROMA_PATH = "./chroma_db"
-EMBED_MODEL = "all-MiniLM-L6-v2"
-CHUNK_SIZE = 250  # Fix 2: reduced from 500
+from config import settings
+
+# Config (see config.py / .env.example)
+VAULT_PATH = settings.vault_path
+CHUNK_SIZE = settings.chunk_size
 
 # Init
-model = SentenceTransformer(EMBED_MODEL)
-client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = client.get_or_create_collection("vault")
+model = SentenceTransformer(settings.embed_model)
+client = chromadb.PersistentClient(path=str(settings.chroma_path))
+collection = client.get_or_create_collection(settings.collection_name)
 
 def chunk_text(text, size=CHUNK_SIZE):
     words = text.split()

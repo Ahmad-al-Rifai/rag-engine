@@ -3,15 +3,15 @@ from pydantic import BaseModel
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-CHROMA_PATH = "./chroma_db"
-EMBED_MODEL = "all-MiniLM-L6-v2"
-DEFAULT_TOP_K = 3
+from config import settings
+
+DEFAULT_TOP_K = settings.default_top_k
 
 app = FastAPI(title="Vault RAG API")
 
-model = SentenceTransformer(EMBED_MODEL)
-client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = client.get_or_create_collection("vault")
+model = SentenceTransformer(settings.embed_model)
+client = chromadb.PersistentClient(path=str(settings.chroma_path))
+collection = client.get_or_create_collection(settings.collection_name)
 
 
 class QueryRequest(BaseModel):

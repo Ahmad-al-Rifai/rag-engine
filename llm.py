@@ -1,10 +1,18 @@
 import requests
 
+from config import settings
+
 
 class OllamaProvider:
-    def __init__(self, model: str = "mistral", base_url: str = "http://localhost:11434"):
+    def __init__(
+        self,
+        model: str = settings.ollama_model,
+        base_url: str = settings.ollama_base_url,
+        timeout: int = settings.ollama_timeout,
+    ):
         self.model = model
         self.base_url = base_url
+        self.timeout = timeout
 
     def complete(self, system: str, user: str) -> str:
         response = requests.post(
@@ -17,7 +25,7 @@ class OllamaProvider:
                     {"role": "user", "content": user}
                 ]
             },
-            timeout=120
+            timeout=self.timeout
         )
 
         response.raise_for_status()

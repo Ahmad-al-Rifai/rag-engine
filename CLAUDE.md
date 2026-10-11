@@ -54,12 +54,15 @@ Small, safe, reversible code edits: just do them. Don't ask me things you can di
 - Use pytest. Mock Ollama and other externals. Never weaken assertions to make tests pass.
 
 ## Commands
-<!-- Read from code, not yet run. /audit must confirm them. -->
-- Setup: `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
-- Ingest / re-index: `python ingest.py`
-- Run API: `uvicorn api:app --reload` → `GET /health`, `POST /query {"question": "...", "top_k": 3}`
-- CLI query: `python query.py`
-- Tests: none yet
+All commands run inside WSL Ubuntu in `~/rag-engine` (verified 2026-10-11). `C:\Users\user\rag-engine` is a stale copy; don't use it.
+From a Windows shell: `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --cd /home/user/rag-engine -- bash -s <<'EOF' ... EOF`
+- Setup: `python3 -m venv venv && venv/bin/pip install -r requirements.txt` (CPU-only torch)
+- Config: copy `.env.example` to `.env`; env vars override it (see `config.py`)
+- Ingest / re-index: `venv/bin/python ingest.py` (writes chroma_db; ask first)
+- Run API: `venv/bin/uvicorn api:app --reload --port 8000` → `GET /health`, `POST /query {"question": "...", "top_k": 3}` (startup ~17s)
+- CLI query: `venv/bin/python query.py` (interactive; type `quit` to exit)
+- Tests: `venv/bin/python -m pytest -q`
+- Ollama: runs on Windows; not reachable from WSL yet (NAT networking)
 
 ## Docs to keep current
 - `README.md`: setup, config, run, test

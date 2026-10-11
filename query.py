@@ -1,13 +1,13 @@
 import chromadb
 from sentence_transformers import SentenceTransformer
 
-CHROMA_PATH = "./chroma_db"
-EMBED_MODEL = "all-MiniLM-L6-v2"
-TOP_K = 3
+from config import settings
 
-model = SentenceTransformer(EMBED_MODEL)
-client = chromadb.PersistentClient(path=CHROMA_PATH)
-collection = client.get_or_create_collection("vault")
+TOP_K = settings.default_top_k
+
+model = SentenceTransformer(settings.embed_model)
+client = chromadb.PersistentClient(path=str(settings.chroma_path))
+collection = client.get_or_create_collection(settings.collection_name)
 
 def query_vault(question: str):
     embedding = model.encode(question).tolist()
