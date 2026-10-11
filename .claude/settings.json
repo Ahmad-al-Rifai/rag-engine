@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(git remote -v)",
+      "Bash(ls*)",
+      "Bash(python --version)",
+      "Bash(python3 --version)",
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(df -h*)",
+      "Bash(curl -s http://localhost:11434/api/tags)"
+    ],
+    "ask": [
+      "Bash(git commit*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git merge*)",
+      "Bash(git rebase*)",
+      "Bash(git stash*)",
+      "Bash(git checkout*)",
+      "Bash(pip install*)",
+      "Bash(pip uninstall*)",
+      "Bash(uv add*)",
+      "Bash(poetry add*)",
+      "Bash(ollama pull*)",
+      "Bash(ollama rm*)",
+      "Bash(rm *)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(rm -rf*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)"
+    ]
+  }
+}

@@ -2,4 +2,5 @@ venv/
 chroma_db/
 __pycache__/
 .env
+.claude/settings.local.json
 *.pyc
