@@ -15,7 +15,7 @@ Obsidian Vault → Markdown ingestion → Embeddings → ChromaDB → FastAPI AP
 - `query.py` — inspect retrieval from the terminal
 - `api.py` — exposes retrieval over HTTP
 - `eval_retrieval.py` — scores retrieval quality (hit@1, hit@3, MRR) on a fixed question set
-- `llm.py` — Ollama provider (not wired in yet)
+- `llm.py` — `LLMProvider` interface + `OllamaProvider`; all failures raise `LLMError`
 
 ## Setup
 
@@ -26,6 +26,17 @@ cd ~/rag-engine
 python3 -m venv venv
 venv/bin/pip install -r requirements.txt   # CPU-only torch
 ```
+
+## Ollama (local LLM)
+
+Ollama runs on Windows. WSL reaches it at `localhost:11434` only with mirrored networking, set in `C:\Users\user\.wslconfig`:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Then run `wsl --shutdown` once from Windows. Check from WSL: `curl -s localhost:11434/api/tags`.
 
 ## Configuration
 

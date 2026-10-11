@@ -63,7 +63,7 @@ From a Windows shell: `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --cd /home/user/rag-
 - CLI query: `venv/bin/python query.py "question"` (no arg = interactive)
 - Retrieval eval: `venv/bin/python eval_retrieval.py --live` (temp indexes; live DB read only)
 - Tests: `venv/bin/python -m pytest -q`
-- Ollama: runs on Windows; not reachable from WSL yet (NAT networking)
+- Ollama: runs on Windows; reachable from WSL at `localhost:11434` via mirrored networking (`C:\Users\user\.wslconfig`). Check: `curl -s localhost:11434/api/tags`. mistral on CPU: ~25s+ per answer
 
 ## Docs to keep current
 - `README.md`: setup, config, run, test
