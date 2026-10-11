@@ -33,6 +33,22 @@ def validate(question: str, top_k: int | None) -> tuple[str, int]:
     return question, top_k
 
 
+def diversify(hits: list[Hit], top_k: int, per_source: int = 2) -> list[Hit]:
+    """Keep the ranking but allow at most per_source sections from one note.
+
+    Stops one long note from filling every slot, so multi-part questions
+    still get the other notes they need.
+    """
+    picked, counts = [], {}
+    for h in hits:
+        if counts.get(h.source, 0) < per_source:
+            picked.append(h)
+            counts[h.source] = counts.get(h.source, 0) + 1
+            if len(picked) == top_k:
+                break
+    return picked
+
+
 def retrieve(question: str, top_k: int | None = None, collection=None, embed=None) -> list[Hit]:
     """Return up to top_k chunks, most similar first. Raises ValueError on bad input."""
     question, top_k = validate(question, top_k)

@@ -25,6 +25,7 @@ class Settings:
     ollama_model: str
     ollama_timeout: int
     ollama_keep_alive: str
+    ollama_temperature: float
 
 
 def _get_int(env: dict, name: str, default: int) -> int:
@@ -37,6 +38,19 @@ def _get_int(env: dict, name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer, got {raw!r}") from None
     if value <= 0:
         raise ValueError(f"{name} must be positive, got {value}")
+    return value
+
+
+def _get_float(env: dict, name: str, default: float, low: float, high: float) -> float:
+    raw = env.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from None
+    if not low <= value <= high:
+        raise ValueError(f"{name} must be between {low} and {high}, got {value}")
     return value
 
 
@@ -72,6 +86,7 @@ def load_settings(env_file: str | Path | None = PROJECT_DIR / ".env") -> Setting
         ollama_model=env.get("OLLAMA_MODEL") or "mistral",
         ollama_timeout=_get_int(env, "OLLAMA_TIMEOUT", 300),
         ollama_keep_alive=env.get("OLLAMA_KEEP_ALIVE") or "30m",
+        ollama_temperature=_get_float(env, "OLLAMA_TEMPERATURE", 0.0, 0.0, 2.0),
     )
 
 

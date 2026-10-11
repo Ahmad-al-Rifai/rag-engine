@@ -6,7 +6,7 @@ from config import PROJECT_DIR, load_settings
 
 ALL_VARS = [
     "VAULT_PATH", "CHROMA_PATH", "COLLECTION_NAME", "EMBED_MODEL", "CHUNK_SIZE",
-    "DEFAULT_TOP_K", "RAG_TOP_K", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT", "OLLAMA_KEEP_ALIVE",
+    "DEFAULT_TOP_K", "RAG_TOP_K", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT", "OLLAMA_KEEP_ALIVE", "OLLAMA_TEMPERATURE",
 ]
 
 
@@ -30,6 +30,7 @@ def test_defaults_match_original_hardcoded_values():
     assert s.ollama_model == "mistral"
     assert s.ollama_timeout == 300  # was 120; cold starts exceeded it (increment 5)
     assert s.ollama_keep_alive == "30m"
+    assert s.ollama_temperature == 0.0
 
 
 def test_env_vars_override_defaults(monkeypatch, tmp_path):
@@ -74,3 +75,13 @@ def test_env_file_is_read_and_real_env_wins(monkeypatch, tmp_path):
 
     assert s.ollama_model == "from-file"
     assert s.chunk_size == 75
+
+
+@pytest.mark.parametrize("value, ok", [("0.7", True), ("abc", False), ("-1", False), ("3", False)])
+def test_temperature_is_validated(monkeypatch, value, ok):
+    monkeypatch.setenv("OLLAMA_TEMPERATURE", value)
+    if ok:
+        assert load_settings(env_file=None).ollama_temperature == 0.7
+    else:
+        with pytest.raises(ValueError, match="OLLAMA_TEMPERATURE"):
+            load_settings(env_file=None)

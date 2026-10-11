@@ -70,6 +70,8 @@ def test_system_prompt_marks_notes_as_untrusted_and_defines_not_found():
     ("only [2]", 2, [2]),
     ("bogus [0] [3] [9]", 2, []),
     ("no citations", 2, []),
+    ("per the rules in note 2, processed weekly (note 1)", 2, [2, 1]),  # drifted format
+    ("notebook 2 and footnote 1 are not citations", 2, []),
 ])
 def test_parse_citations(reply, count, expected):
     assert parse_citations(reply, count) == expected
@@ -150,3 +152,40 @@ def test_ask_whitespace_question_is_400(client):
                                   {"question": "x" * 1001}])
 def test_ask_rejects_invalid_requests(client, body):
     assert client.post("/ask", json=body).status_code == 422
+
+
+# --- increment 6: diversity and "don't know" normalisation ----------------
+
+from retrieval import diversify  # noqa: E402
+
+
+def test_diversify_caps_sections_per_note_and_keeps_order():
+    ranked = [hit("a.md", "a0"), hit("a.md", "a1"), hit("a.md", "a2"), hit("b.md", "b0"), hit("a.md", "a3")]
+    assert [h.text for h in diversify(ranked, 3, per_source=2)] == ["a0", "a1", "b0"]
+
+
+def test_answer_over_fetches_then_diversifies():
+    many = [hit("readme.md", f"r{i}") for i in range(4)] + [hit("profile.md", "goals")]
+    seen_k = []
+
+    def retrieve_fn(q, k):
+        seen_k.append(k)
+        return many[:k]
+
+    provider = FakeProvider("Goals [3].")
+    a = answer("goals?", 3, provider=provider, retrieve_fn=retrieve_fn)
+    assert seen_k == [9]  # 3 * top_k candidates
+    assert [s.source for s in a.retrieved] == ["readme.md", "readme.md", "profile.md"]
+    assert [s.source for s in a.cited] == ["profile.md"]
+
+
+@pytest.mark.parametrize("reply", [NOT_FOUND, NOT_FOUND + " [5]", "[1] i don't know based on the vault"])
+def test_dont_know_answer_never_has_sources(reply):
+    a = answer("q", 5, provider=FakeProvider(reply), retrieve_fn=fake_retrieve(HITS))
+    assert a.answer == NOT_FOUND and a.cited == []
+
+
+def test_partial_answer_mentioning_dont_know_is_kept():
+    reply = "Goals are not in the notes, but CTFs go in 07_Labs [1]."
+    a = answer("q", 5, provider=FakeProvider(reply), retrieve_fn=fake_retrieve(HITS))
+    assert a.answer == reply and len(a.cited) == 1

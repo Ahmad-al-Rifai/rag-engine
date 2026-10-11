@@ -36,11 +36,13 @@ class OllamaProvider:
         base_url: str = settings.ollama_base_url,
         timeout: int = settings.ollama_timeout,
         keep_alive: str = settings.ollama_keep_alive,
+        temperature: float = settings.ollama_temperature,
     ):
         self.model = model
         self.base_url = base_url
         self.timeout = timeout
         self.keep_alive = keep_alive
+        self.temperature = temperature
 
     def complete(self, system: str, user: str) -> str:
         try:
@@ -50,6 +52,7 @@ class OllamaProvider:
                     "model": self.model,
                     "stream": False,
                     "keep_alive": self.keep_alive,
+                    "options": {"temperature": self.temperature},
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": user},
