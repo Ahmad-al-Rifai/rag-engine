@@ -1,68 +1,184 @@
-import os
+"""Index the Obsidian vault into ChromaDB.
+
+Re-running is safe (idempotent):
+- chunk IDs come from the vault-relative path + chunk index, so they don't
+  change when the vault moves;
+- unchanged notes are skipped (fingerprint check);
+- changed notes have all their old chunks replaced, so a shrunk note leaves
+  no stale chunks behind;
+- chunks whose note no longer exists (deleted, renamed, or indexed under an
+  old ID scheme) are removed.
+
+Usage: venv/bin/python ingest.py [--dry-run]
+"""
+import argparse
 import hashlib
-import frontmatter
-import chromadb
-from sentence_transformers import SentenceTransformer
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
+
+import frontmatter
 
 from config import settings
 
-# Config (see config.py / .env.example)
-VAULT_PATH = settings.vault_path
-CHUNK_SIZE = settings.chunk_size
+# Bump when the chunk text or metadata format changes, to force a re-embed.
+INDEX_VERSION = "2"
 
-# Init
-model = SentenceTransformer(settings.embed_model)
-client = chromadb.PersistentClient(path=str(settings.chroma_path))
-collection = client.get_or_create_collection(settings.collection_name)
+EXCLUDED_DIRS = {"Templates"}
 
-def chunk_text(text, size=CHUNK_SIZE):
+Embedder = Callable[[list[str]], list[list[float]]]
+
+
+@dataclass
+class Summary:
+    notes_seen: int = 0
+    added: list[str] = field(default_factory=list)
+    updated: list[str] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    removed_sources: list[str] = field(default_factory=list)
+    chunks_written: int = 0
+    chunks_removed: int = 0
+    errors: list[str] = field(default_factory=list)
+
+    def report(self, dry_run: bool = False) -> str:
+        prefix = "[dry run, nothing written] " if dry_run else ""
+        lines = [
+            f"{prefix}{self.notes_seen} notes: "
+            f"{len(self.added)} added, {len(self.updated)} updated, "
+            f"{len(self.unchanged)} unchanged, {len(self.removed_sources)} sources removed",
+            f"{prefix}chunks: {self.chunks_written} written, {self.chunks_removed} removed",
+        ]
+        lines += [f"  added: {s}" for s in self.added]
+        lines += [f"  updated: {s}" for s in self.updated]
+        lines += [f"  removed: {s}" for s in self.removed_sources]
+        lines += [f"  ERROR: {e}" for e in self.errors]
+        return "\n".join(lines)
+
+
+def chunk_text(text: str, size: int) -> list[str]:
     words = text.split()
-    return [" ".join(words[i:i+size]) for i in range(0, len(words), size)]
+    return [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
 
-def ingest_vault():
-    files = [f for f in Path(VAULT_PATH).rglob("*.md") if "Templates" not in f.parts]
-    print(f"Found {len(files)} markdown files")
 
-    for filepath in files:
+def discover_notes(vault: Path) -> list[Path]:
+    """All .md files inside the vault, skipping Templates and dot-folders
+    (.obsidian, .trash, ...) and anything that resolves outside the vault."""
+    vault = vault.resolve()
+    notes = []
+    for path in sorted(vault.rglob("*.md")):
+        rel_parts = path.relative_to(vault).parts
+        if any(p in EXCLUDED_DIRS or p.startswith(".") for p in rel_parts[:-1]):
+            continue
+        if not path.resolve().is_relative_to(vault):  # symlink escaping the vault
+            continue
+        notes.append(path)
+    return notes
+
+
+def fingerprint(raw: str, chunk_size: int, embed_model: str) -> str:
+    key = f"{INDEX_VERSION}|{embed_model}|{chunk_size}|{raw}"
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def build_chunks(path: Path, vault: Path, chunk_size: int, embed_model: str):
+    """Return (source, fingerprint, ids, texts, metadatas) for one note."""
+    rel = path.resolve().relative_to(vault.resolve()).as_posix()
+    raw = path.read_text(encoding="utf-8")
+    post = frontmatter.loads(raw)
+    content = post.content.strip()
+    fp = fingerprint(raw, chunk_size, embed_model)
+
+    chunks = chunk_text(content, chunk_size) if content else []
+    folder = Path(rel).parent.as_posix()
+    ids, metas = [], []
+    for i in range(len(chunks)):
+        ids.append(f"{rel}#{i}")
+        metas.append({
+            "source": rel,
+            "filename": path.name,
+            "folder": "" if folder == "." else folder,
+            "chunk": i,
+            "title": str(post.metadata.get("title", path.stem)),
+            "tags": str(post.metadata.get("tags", [])),
+            "area": str(post.metadata.get("area", "")),
+            "fingerprint": fp,
+        })
+    return rel, fp, ids, chunks, metas
+
+
+def ingest(vault: Path, collection, embed: Embedder, chunk_size: int,
+           embed_model: str, dry_run: bool = False) -> Summary:
+    summary = Summary()
+
+    # What's indexed now: source -> (set of chunk ids, set of fingerprints)
+    existing = collection.get(include=["metadatas"])
+    indexed: dict[str, tuple[set, set]] = {}
+    for chunk_id, meta in zip(existing["ids"], existing["metadatas"]):
+        meta = meta or {}
+        ids, fps = indexed.setdefault(meta.get("source", ""), (set(), set()))
+        ids.add(chunk_id)
+        fps.add(meta.get("fingerprint"))
+
+    seen_sources = set()
+    for path in discover_notes(vault):
+        summary.notes_seen += 1
         try:
-            post = frontmatter.load(filepath)
-            content = post.content.strip()
-            metadata = dict(post.metadata)
+            source, fp, ids, texts, metas = build_chunks(path, vault, chunk_size, embed_model)
+        except Exception as e:  # unreadable / bad frontmatter: keep old chunks
+            rel = path.relative_to(vault).as_posix()
+            seen_sources.add(rel)
+            summary.errors.append(f"{rel}: {e}")
+            continue
+        seen_sources.add(source)
 
-            if not content:
-                continue
+        old_ids, old_fps = indexed.get(source, (set(), set()))
+        nothing_to_do = not ids and not old_ids  # empty note, never indexed
+        if nothing_to_do or (old_fps == {fp} and old_ids == set(ids)):
+            summary.unchanged.append(source)
+            continue
 
-            chunks = chunk_text(content)
-            for i, chunk in enumerate(chunks):
-                # Fix 1: collision-safe IDs
-                doc_id = hashlib.md5(
-                    f"{filepath}_{i}".encode()
-                ).hexdigest()
+        (summary.updated if old_ids else summary.added).append(source)
+        summary.chunks_written += len(ids)
+        summary.chunks_removed += len(old_ids - set(ids))
+        if dry_run:
+            continue
+        if old_ids - set(ids):
+            collection.delete(ids=sorted(old_ids - set(ids)))
+        if ids:
+            collection.upsert(ids=ids, embeddings=embed(texts), documents=texts, metadatas=metas)
 
-                embedding = model.encode(chunk).tolist()
+    # Sources in the DB that no longer exist on disk (deleted notes, old
+    # absolute-path IDs from the previous scheme).
+    for source, (old_ids, _) in sorted(indexed.items()):
+        if source in seen_sources:
+            continue
+        summary.removed_sources.append(source)
+        summary.chunks_removed += len(old_ids)
+        if not dry_run:
+            collection.delete(ids=sorted(old_ids))
 
-                collection.upsert(
-                    ids=[doc_id],
-                    embeddings=[embedding],
-                    documents=[chunk],
-                    metadatas=[{
-                        "source": str(filepath),
-                        "filename": filepath.name,
-                        "folder": str(filepath.parent),  # Fix 3: folder metadata
-                        "chunk": i,
-                        "title": str(metadata.get("title", filepath.stem)),
-                        "tags": str(metadata.get("tags", [])),
-                        "area": str(metadata.get("area", "")),
-                    }]
-                )
+    return summary
 
-            print(f"Ingested: {filepath.name} ({len(chunks)} chunks)")
 
-        except Exception as e:
-            print(f"Error on {filepath.name}: {e}")
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Index the Obsidian vault into ChromaDB.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="show what would change without writing to ChromaDB")
+    args = parser.parse_args(argv)
 
-    print("Ingestion complete.")
+    vault = settings.vault_path
+    if not vault.is_dir():
+        print(f"Vault not found: {vault} (set VAULT_PATH)", file=sys.stderr)
+        return 2
+
+    from store import embed, get_collection
+
+    summary = ingest(vault, get_collection(), embed, settings.chunk_size,
+                     settings.embed_model, dry_run=args.dry_run)
+    print(summary.report(dry_run=args.dry_run))
+    return 1 if summary.errors else 0
+
 
 if __name__ == "__main__":
-    ingest_vault()
+    sys.exit(main())
