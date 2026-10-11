@@ -61,6 +61,7 @@ From a Windows shell: `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --cd /home/user/rag-
 - Ingest / re-index: `venv/bin/python ingest.py [--dry-run]` (idempotent; deletes stale chunks — dry-run first)
 - Run API: `venv/bin/uvicorn api:app --reload --port 8000` → `GET /health`, `POST /query {"question": "...", "top_k": 3}` (startup ~17s)
 - CLI query: `venv/bin/python query.py "question"` (no arg = interactive)
+- CLI ask (RAG answer): `venv/bin/python ask.py "question"`; API: `POST /ask {"question": "..."}` (503 if Ollama is down)
 - Retrieval eval: `venv/bin/python eval_retrieval.py --live` (temp indexes; live DB read only)
 - Tests: `venv/bin/python -m pytest -q`
 - Ollama: runs on Windows; reachable from WSL at `localhost:11434` via mirrored networking (`C:\Users\user\.wslconfig`). Check: `curl -s localhost:11434/api/tags`. mistral on CPU: ~25s+ per answer

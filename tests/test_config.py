@@ -6,7 +6,7 @@ from config import PROJECT_DIR, load_settings
 
 ALL_VARS = [
     "VAULT_PATH", "CHROMA_PATH", "COLLECTION_NAME", "EMBED_MODEL", "CHUNK_SIZE",
-    "DEFAULT_TOP_K", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT",
+    "DEFAULT_TOP_K", "RAG_TOP_K", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_TIMEOUT", "OLLAMA_KEEP_ALIVE",
 ]
 
 
@@ -25,9 +25,11 @@ def test_defaults_match_original_hardcoded_values():
     assert s.embed_model == "all-MiniLM-L6-v2"
     assert s.chunk_size == 120  # changed from 250 in increment 3 (eval_retrieval.py)
     assert s.default_top_k == 3
+    assert s.rag_top_k == 5
     assert s.ollama_base_url == "http://localhost:11434"
     assert s.ollama_model == "mistral"
-    assert s.ollama_timeout == 120
+    assert s.ollama_timeout == 300  # was 120; cold starts exceeded it (increment 5)
+    assert s.ollama_keep_alive == "30m"
 
 
 def test_env_vars_override_defaults(monkeypatch, tmp_path):

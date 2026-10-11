@@ -23,7 +23,7 @@ class FakeResponse:
 
 @pytest.fixture
 def provider():
-    return OllamaProvider(model="mistral", base_url="http://ollama.test:11434", timeout=7)
+    return OllamaProvider(model="mistral", base_url="http://ollama.test:11434", timeout=7, keep_alive="10m")
 
 
 def patch_post(monkeypatch, result):
@@ -48,6 +48,7 @@ def test_complete_sends_chat_request_and_returns_text(monkeypatch, provider):
     assert call["timeout"] == (llm.CONNECT_TIMEOUT, 7)  # (connect, read)
     assert call["json"]["model"] == "mistral"
     assert call["json"]["stream"] is False
+    assert call["json"]["keep_alive"] == "10m"
     assert call["json"]["messages"] == [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "user q"},

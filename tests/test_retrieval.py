@@ -139,5 +139,8 @@ def test_whitespace_question_is_400(client):
     assert "empty" in r.json()["detail"]
 
 
-def test_health_reports_chunks_and_notes(client):
-    assert client.get("/health").json() == {"status": "ok", "chunks_indexed": 2, "notes_indexed": 2}
+def test_health_reports_chunks_notes_and_llm(client, monkeypatch):
+    llm_status = {"reachable": True, "model_available": True, "detail": "ok"}
+    monkeypatch.setattr(api, "get_provider", lambda: type("P", (), {"health": lambda self: llm_status})())
+    assert client.get("/health").json() == {
+        "status": "ok", "chunks_indexed": 2, "notes_indexed": 2, "llm": llm_status}

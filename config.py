@@ -20,9 +20,11 @@ class Settings:
     embed_model: str
     chunk_size: int
     default_top_k: int
+    rag_top_k: int
     ollama_base_url: str
     ollama_model: str
     ollama_timeout: int
+    ollama_keep_alive: str
 
 
 def _get_int(env: dict, name: str, default: int) -> int:
@@ -65,9 +67,11 @@ def load_settings(env_file: str | Path | None = PROJECT_DIR / ".env") -> Setting
         embed_model=env.get("EMBED_MODEL") or "all-MiniLM-L6-v2",
         chunk_size=_get_int(env, "CHUNK_SIZE", 120),
         default_top_k=_get_int(env, "DEFAULT_TOP_K", 3),
+        rag_top_k=_get_int(env, "RAG_TOP_K", 5),
         ollama_base_url=(env.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/"),
         ollama_model=env.get("OLLAMA_MODEL") or "mistral",
-        ollama_timeout=_get_int(env, "OLLAMA_TIMEOUT", 120),
+        ollama_timeout=_get_int(env, "OLLAMA_TIMEOUT", 300),
+        ollama_keep_alive=env.get("OLLAMA_KEEP_ALIVE") or "30m",
     )
 
 
