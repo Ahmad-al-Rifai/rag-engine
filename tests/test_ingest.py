@@ -169,3 +169,13 @@ def test_discover_skips_templates_dotfolders_and_escaping_symlinks(vault, tmp_pa
     found = [p.relative_to(vault).as_posix() for p in discover_notes(vault)]
 
     assert found == ["a.md", "projects/b.md"]
+
+
+def test_errors_and_summary_are_logged(vault, collection, caplog):
+    run(vault, collection)
+    (vault / "a.md").write_bytes(b"\xff bad")
+    with caplog.at_level("INFO", logger="ingest"):
+        run(vault, collection)
+    messages = [r.getMessage() for r in caplog.records]
+    assert any(r.levelname == "WARNING" and "a.md" in r.getMessage() for r in caplog.records)
+    assert any("1 errors" in m for m in messages)

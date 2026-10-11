@@ -4,7 +4,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 import rag
-from config import settings
+import logging
+
+from config import settings, setup_logging
 from llm import LLMError, get_provider
 from retrieval import MAX_QUESTION_CHARS, MAX_TOP_K, retrieve
 from store import get_collection, get_model
@@ -15,6 +17,9 @@ async def lifespan(app: FastAPI):
     get_model()  # load the embedding model once at startup, not on the first request
     yield
 
+
+setup_logging()
+log = logging.getLogger(__name__)
 
 app = FastAPI(title="Vault RAG API", lifespan=lifespan)
 
@@ -96,6 +101,7 @@ def ask(req: AskRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except LLMError as e:
+        log.error("/ask -> 503: %s", e)
         raise HTTPException(status_code=503, detail=f"LLM unavailable: {e}")
 
     return AskResponse(

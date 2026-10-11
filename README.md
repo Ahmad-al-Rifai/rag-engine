@@ -1,6 +1,8 @@
-# RAG Engine
+# RAG Engine (AIOS)
 
-Local retrieval engine for an Obsidian markdown vault.
+Local-first RAG over an Obsidian markdown vault: ask a question, get an answer from your notes with the notes it came from.
+
+Docs: [architecture](docs/ARCHITECTURE.md) · [status and known issues](docs/STATUS.md)
 
 ## Pipeline
 
@@ -17,6 +19,7 @@ Obsidian Vault → Markdown ingestion → Embeddings → ChromaDB → retrieval 
 - `ask.py` — ask a question from the terminal, get an answer with sources
 - `api.py` — HTTP API: `/health`, `/query` (retrieval only), `/ask` (answer + sources)
 - `eval_retrieval.py` — scores retrieval quality (hit@1, hit@3, MRR) on a fixed question set
+- `eval_rag.py` — scores real LLM answers from every angle (facts, synthesis, don't-know, injection, failures)
 - `llm.py` — `LLMProvider` interface + `OllamaProvider`; all failures raise `LLMError`
 
 ## Setup
@@ -44,6 +47,8 @@ Then run `wsl --shutdown` once from Windows. Check from WSL: `curl -s localhost:
 
 Copy `.env.example` to `.env` and edit as needed. Real environment variables override `.env`. Relative paths (like `CHROMA_PATH=chroma_db`) are resolved against the project folder, so scripts work from any directory.
 
+Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING|ERROR`); command results go to stdout. Set `HF_HUB_OFFLINE=1` to stop the embedding model from contacting the Hugging Face Hub once it is cached.
+
 ## Run
 
 ```bash
@@ -53,6 +58,7 @@ venv/bin/uvicorn api:app --reload --port 8000     # GET /health, POST /query, PO
 venv/bin/python ask.py "what are my rules?"       # answer with sources (needs Ollama)
 venv/bin/python query.py "what are my rules"      # one-shot retrieval (no arg = interactive)
 venv/bin/python eval_retrieval.py --live          # retrieval quality report
+venv/bin/python eval_rag.py                       # answer quality vs real LLM (~20 min on CPU)
 ```
 
 ## Test

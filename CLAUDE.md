@@ -63,7 +63,8 @@ From a Windows shell: `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --cd /home/user/rag-
 - CLI query: `venv/bin/python query.py "question"` (no arg = interactive)
 - CLI ask (RAG answer): `venv/bin/python ask.py "question"`; API: `POST /ask {"question": "..."}` (503 if Ollama is down)
 - Retrieval eval: `venv/bin/python eval_retrieval.py --live` (temp indexes; live DB read only)
-- Tests: `venv/bin/python -m pytest -q`
+- Tests: `venv/bin/python -m pytest -q` (85 tests, ~10s, no network)
+- Answer-quality eval: `venv/bin/python eval_rag.py [--only CASE ...]` (real mistral; ~20 min; 12/13 on 2026-10-11)
 - Ollama: runs on Windows; reachable from WSL at `localhost:11434` via mirrored networking (`C:\Users\user\.wslconfig`). Check: `curl -s localhost:11434/api/tags`. mistral on CPU: ~25s+ per answer
 
 ## Docs to keep current

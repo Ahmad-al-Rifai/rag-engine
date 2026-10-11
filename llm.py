@@ -4,6 +4,8 @@ Everything outside this file talks to `LLMProvider` (via get_provider()), so a
 different backend can be added here without touching the RAG code. Every
 provider failure surfaces as LLMError with a readable message.
 """
+import logging
+import time
 from typing import Protocol
 
 import requests
@@ -11,6 +13,8 @@ import requests
 from config import settings
 
 CONNECT_TIMEOUT = 5  # seconds to establish the connection
+
+log = logging.getLogger(__name__)
 
 
 class LLMError(RuntimeError):
@@ -45,6 +49,16 @@ class OllamaProvider:
         self.temperature = temperature
 
     def complete(self, system: str, user: str) -> str:
+        start = time.time()
+        try:
+            reply = self._chat(system, user)
+        except LLMError as e:
+            log.warning("ollama %s failed after %.1fs: %s", self.model, time.time() - start, e)
+            raise
+        log.info("ollama %s answered in %.1fs (%d chars)", self.model, time.time() - start, len(reply))
+        return reply
+
+    def _chat(self, system: str, user: str) -> str:
         try:
             response = requests.post(
                 f"{self.base_url}/api/chat",

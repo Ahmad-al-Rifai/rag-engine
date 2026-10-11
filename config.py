@@ -26,6 +26,21 @@ class Settings:
     ollama_timeout: int
     ollama_keep_alive: str
     ollama_temperature: float
+    log_level: str
+
+
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+
+def setup_logging(level: str | None = None) -> None:
+    """Log to stderr (CLI output on stdout stays clean). Call once per entry point."""
+    import logging
+
+    logging.basicConfig(
+        level=level or settings.log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def _get_int(env: dict, name: str, default: int) -> int:
@@ -87,7 +102,15 @@ def load_settings(env_file: str | Path | None = PROJECT_DIR / ".env") -> Setting
         ollama_timeout=_get_int(env, "OLLAMA_TIMEOUT", 300),
         ollama_keep_alive=env.get("OLLAMA_KEEP_ALIVE") or "30m",
         ollama_temperature=_get_float(env, "OLLAMA_TEMPERATURE", 0.0, 0.0, 2.0),
+        log_level=_get_log_level(env),
     )
+
+
+def _get_log_level(env: dict) -> str:
+    level = (env.get("LOG_LEVEL") or "INFO").upper()
+    if level not in LOG_LEVELS:
+        raise ValueError(f"LOG_LEVEL must be one of {', '.join(LOG_LEVELS)}, got {level!r}")
+    return level
 
 
 settings = load_settings()

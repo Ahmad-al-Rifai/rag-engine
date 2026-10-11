@@ -6,7 +6,7 @@ Usage:
 """
 import sys
 
-from config import settings
+from config import settings, setup_logging
 from retrieval import retrieve
 
 
@@ -29,6 +29,7 @@ def query_vault(question: str, top_k: int = settings.default_top_k):
 
 
 if __name__ == "__main__":
+    setup_logging()
     if len(sys.argv) > 1:
         query_vault(" ".join(sys.argv[1:]))
         sys.exit(0)

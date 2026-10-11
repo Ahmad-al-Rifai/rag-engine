@@ -13,14 +13,18 @@ Usage: venv/bin/python ingest.py [--dry-run]
 """
 import argparse
 import hashlib
+import logging
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 import frontmatter
 
-from config import settings
+from config import settings, setup_logging
+
+log = logging.getLogger("ingest")  # stable name even when run as a script
 
 # Bump when the chunk text or metadata format changes, to force a re-embed.
 # 3: heading-aware chunks prefixed with title + heading trail.
@@ -167,6 +171,7 @@ def ingest(vault: Path, collection, embed: Embedder, chunk_size: int,
            embed_model: str, dry_run: bool = False) -> Summary:
     summary = Summary()
     vault = vault.resolve()
+    start = time.time()
 
     # What's indexed now: source -> (set of chunk ids, set of fingerprints)
     existing = collection.get(include=["metadatas"])
@@ -186,6 +191,7 @@ def ingest(vault: Path, collection, embed: Embedder, chunk_size: int,
             rel = path.relative_to(vault).as_posix()
             seen_sources.add(rel)
             summary.errors.append(f"{rel}: {e}")
+            log.warning("skipped %s (kept its previous chunks): %s", rel, e)
             continue
         seen_sources.add(source)
 
@@ -215,6 +221,10 @@ def ingest(vault: Path, collection, embed: Embedder, chunk_size: int,
         if not dry_run:
             collection.delete(ids=sorted(old_ids))
 
+    log.info("ingest%s: %d notes, %d added, %d updated, %d removed, %d errors in %.1fs",
+             " (dry run)" if dry_run else "", summary.notes_seen, len(summary.added),
+             len(summary.updated), len(summary.removed_sources), len(summary.errors),
+             time.time() - start)
     return summary
 
 
@@ -223,6 +233,7 @@ def main(argv=None) -> int:
     parser.add_argument("--dry-run", action="store_true",
                         help="show what would change without writing to ChromaDB")
     args = parser.parse_args(argv)
+    setup_logging()
 
     vault = settings.vault_path
     if not vault.is_dir():

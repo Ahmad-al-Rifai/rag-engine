@@ -7,6 +7,7 @@ import sys
 import time
 
 import rag
+from config import setup_logging
 from llm import LLMError
 
 
@@ -14,6 +15,7 @@ def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__.strip())
         return 2
+    setup_logging()
     question = " ".join(argv)
     start = time.time()
     try:

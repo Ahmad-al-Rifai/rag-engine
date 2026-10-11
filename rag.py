@@ -7,6 +7,7 @@ Note text is untrusted data. It goes inside <note> blocks, any tag-like text
 in it is neutralised so it can't close the block, and the system prompt tells
 the model never to follow instructions found inside notes.
 """
+import logging
 import re
 from dataclasses import dataclass, field
 
@@ -15,6 +16,8 @@ from retrieval import MAX_TOP_K, Hit, diversify, retrieve, validate
 
 NOT_FOUND = "I don't know based on the vault."
 PER_NOTE = 2  # max sections from one note in the prompt
+
+log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = f"""You answer questions about the user's personal notes.
 
@@ -83,6 +86,7 @@ def answer(question: str, top_k: int | None = None, provider=None, retrieve_fn=r
     hits = diversify(candidates, top_k, PER_NOTE)
     sources = [Source(i, h.source, h.title, h.distance) for i, h in enumerate(hits, 1)]
 
+    log.info("ask: %d sections from %s", len(hits), sorted({h.source for h in hits}))
     if not hits:  # nothing indexed: don't ask the model to guess
         return Answer(question, NOT_FOUND, retrieved=[], used_llm=False)
 
@@ -92,6 +96,10 @@ def answer(question: str, top_k: int | None = None, provider=None, retrieve_fn=r
 
     reply = provider.complete(SYSTEM_PROMPT, build_prompt(question, hits)).strip()
     if is_not_found(reply):  # "don't know" must never come with sources
+        log.info("ask: answered don't-know")
         return Answer(question, NOT_FOUND, cited=[], retrieved=sources)
     cited = [sources[n - 1] for n in parse_citations(reply, len(sources))]
+    if not cited:
+        log.warning("ask: answer has no recognisable citations")
+    log.info("ask: cited %s", [s.source for s in cited])
     return Answer(question, reply, cited=cited, retrieved=sources)
