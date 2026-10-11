@@ -9,9 +9,12 @@ Obsidian Vault → Markdown ingestion → Embeddings → ChromaDB → FastAPI AP
 ## Files
 
 - `config.py` — all settings, read from env vars / `.env` (defaults in `.env.example`)
-- `ingest.py` — reads markdown notes and stores embeddings
-- `query.py` — tests retrieval from terminal
+- `ingest.py` — indexes the vault: heading-aware chunks, idempotent, removes stale chunks (`--dry-run` to preview)
+- `store.py` — shared, lazily loaded embedding model and ChromaDB collection
+- `retrieval.py` — `retrieve(question, top_k)`: the single retrieval path
+- `query.py` — inspect retrieval from the terminal
 - `api.py` — exposes retrieval over HTTP
+- `eval_retrieval.py` — scores retrieval quality (hit@1, hit@3, MRR) on a fixed question set
 - `llm.py` — Ollama provider (not wired in yet)
 
 ## Setup
@@ -31,9 +34,11 @@ Copy `.env.example` to `.env` and edit as needed. Real environment variables ove
 ## Run
 
 ```bash
-venv/bin/python ingest.py                         # index the vault
+venv/bin/python ingest.py --dry-run               # preview what would change
+venv/bin/python ingest.py                         # index the vault (safe to re-run)
 venv/bin/uvicorn api:app --reload --port 8000     # GET /health, POST /query
-venv/bin/python query.py                          # interactive retrieval
+venv/bin/python query.py "what are my rules"      # one-shot retrieval (no arg = interactive)
+venv/bin/python eval_retrieval.py --live          # retrieval quality report
 ```
 
 ## Test

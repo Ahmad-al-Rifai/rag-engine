@@ -23,7 +23,7 @@ def test_defaults_match_original_hardcoded_values():
     assert s.chroma_path == PROJECT_DIR / "chroma_db"
     assert s.collection_name == "vault"
     assert s.embed_model == "all-MiniLM-L6-v2"
-    assert s.chunk_size == 250
+    assert s.chunk_size == 120  # changed from 250 in increment 3 (eval_retrieval.py)
     assert s.default_top_k == 3
     assert s.ollama_base_url == "http://localhost:11434"
     assert s.ollama_model == "mistral"

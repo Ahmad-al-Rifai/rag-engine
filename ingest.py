@@ -23,7 +23,8 @@ import frontmatter
 from config import settings
 
 # Bump when the chunk text or metadata format changes, to force a re-embed.
-INDEX_VERSION = "2"
+# 3: heading-aware chunks prefixed with title + heading trail.
+INDEX_VERSION = "3"
 
 EXCLUDED_DIRS = {"Templates"}
 
@@ -61,6 +62,60 @@ def chunk_text(text: str, size: int) -> list[str]:
     return [" ".join(words[i:i + size]) for i in range(0, len(words), size)]
 
 
+def note_title(post, path: Path) -> str:
+    """Frontmatter title, else the first H1, else the file name."""
+    if post.metadata.get("title"):
+        return str(post.metadata["title"])
+    for line in post.content.splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return path.stem
+
+
+def chunk_markdown(content: str, title: str, max_words: int) -> list[str]:
+    """Split a note on its Markdown headings.
+
+    Each chunk is one section, prefixed with the note title and the heading
+    trail (e.g. "Master Rules > AI Agent Rules > Reliability") so a section
+    still says what it's about on its own. Sections longer than max_words are
+    split by words; heading-only sections are folded into the trail.
+    """
+    trail: list[tuple[int, str]] = []  # (level, heading text)
+    sections: list[tuple[str, list[str]]] = []
+    body: list[str] = []
+
+    def flush():
+        text = "\n".join(body).strip()
+        if text:
+            sections.append((" > ".join(h for _, h in trail), text))
+        body.clear()
+
+    for line in content.splitlines():
+        stripped = line.lstrip()
+        level = len(stripped) - len(stripped.lstrip("#"))
+        if 1 <= level <= 6 and stripped[level:level + 1] == " ":
+            flush()
+            trail[:] = [(lv, h) for lv, h in trail if lv < level]
+            trail.append((level, stripped[level:].strip()))
+        else:
+            body.append(line)
+    flush()
+
+    def norm(s: str) -> str:
+        return " ".join(s.lower().replace("-", " ").replace("_", " ").split())
+
+    chunks = []
+    for heading, text in sections:
+        parts = [title]
+        for h in heading.split(" > ") if heading else []:
+            if norm(h) != norm(parts[-1]):  # skip an H1 that just repeats the title
+                parts.append(h)
+        header = " > ".join(parts)
+        for piece in chunk_text(text, max_words):
+            chunks.append(f"{header}\n{piece}")
+    return chunks
+
+
 def discover_notes(vault: Path) -> list[Path]:
     """All .md files inside the vault, skipping Templates and dot-folders
     (.obsidian, .trash, ...) and anything that resolves outside the vault."""
@@ -89,7 +144,8 @@ def build_chunks(path: Path, vault: Path, chunk_size: int, embed_model: str):
     content = post.content.strip()
     fp = fingerprint(raw, chunk_size, embed_model)
 
-    chunks = chunk_text(content, chunk_size) if content else []
+    title = note_title(post, path)
+    chunks = chunk_markdown(content, title, chunk_size) if content else []
     folder = Path(rel).parent.as_posix()
     ids, metas = [], []
     for i in range(len(chunks)):
@@ -99,7 +155,7 @@ def build_chunks(path: Path, vault: Path, chunk_size: int, embed_model: str):
             "filename": path.name,
             "folder": "" if folder == "." else folder,
             "chunk": i,
-            "title": str(post.metadata.get("title", path.stem)),
+            "title": title,
             "tags": str(post.metadata.get("tags", [])),
             "area": str(post.metadata.get("area", "")),
             "fingerprint": fp,
@@ -110,6 +166,7 @@ def build_chunks(path: Path, vault: Path, chunk_size: int, embed_model: str):
 def ingest(vault: Path, collection, embed: Embedder, chunk_size: int,
            embed_model: str, dry_run: bool = False) -> Summary:
     summary = Summary()
+    vault = vault.resolve()
 
     # What's indexed now: source -> (set of chunk ids, set of fingerprints)
     existing = collection.get(include=["metadatas"])

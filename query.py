@@ -1,38 +1,37 @@
-import chromadb
-from sentence_transformers import SentenceTransformer
+"""Inspect retrieval from the terminal.
+
+Usage:
+  venv/bin/python query.py "what are my rules"   # one question
+  venv/bin/python query.py                       # interactive; 'quit' to exit
+"""
+import sys
 
 from config import settings
+from retrieval import retrieve
 
-TOP_K = settings.default_top_k
 
-model = SentenceTransformer(settings.embed_model)
-client = chromadb.PersistentClient(path=str(settings.chroma_path))
-collection = client.get_or_create_collection(settings.collection_name)
-
-def query_vault(question: str):
-    embedding = model.encode(question).tolist()
-    results = collection.query(
-        query_embeddings=[embedding],
-        n_results=TOP_K,
-        include=["documents", "metadatas", "distances"]
-    )
+def query_vault(question: str, top_k: int = settings.default_top_k):
+    try:
+        hits = retrieve(question, top_k)
+    except ValueError as e:
+        print(f"Invalid query: {e}")
+        return
 
     print(f"\nQuery: {question}")
     print("=" * 50)
-
-    for i, (doc, meta, dist) in enumerate(zip(
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0]
-    )):
-        print(f"\nResult {i+1}")
-        print(f"Source: {meta['filename']}")
-        print(f"Folder: {meta['folder']}")
-        print(f"Distance: {dist:.4f}")
-        print(f"Content: {doc[:300]}...")
+    for i, h in enumerate(hits, 1):
+        print(f"\nResult {i}")
+        print(f"Source: {h.source} (chunk {h.chunk})")
+        print(f"Title: {h.title}")
+        print(f"Distance: {h.distance:.4f}")
+        print(f"Content: {h.text[:300]}...")
         print("-" * 30)
 
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        query_vault(" ".join(sys.argv[1:]))
+        sys.exit(0)
     while True:
         q = input("\nEnter query (or 'quit'): ").strip()
         if q.lower() == "quit":

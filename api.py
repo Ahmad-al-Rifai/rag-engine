@@ -1,28 +1,32 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import chromadb
-from sentence_transformers import SentenceTransformer
+from pydantic import BaseModel, Field
 
 from config import settings
+from retrieval import MAX_QUESTION_CHARS, MAX_TOP_K, retrieve
+from store import get_collection, get_model
 
-DEFAULT_TOP_K = settings.default_top_k
 
-app = FastAPI(title="Vault RAG API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_model()  # load the embedding model once at startup, not on the first request
+    yield
 
-model = SentenceTransformer(settings.embed_model)
-client = chromadb.PersistentClient(path=str(settings.chroma_path))
-collection = client.get_or_create_collection(settings.collection_name)
+
+app = FastAPI(title="Vault RAG API", lifespan=lifespan)
 
 
 class QueryRequest(BaseModel):
-    question: str
-    top_k: int = DEFAULT_TOP_K
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    top_k: int = Field(default=settings.default_top_k, ge=1, le=MAX_TOP_K)
 
 
 class ResultItem(BaseModel):
-    source: str
-    filename: str
+    source: str  # vault-relative path
+    title: str
     folder: str
+    chunk: int
     distance: float
     content: str
 
@@ -34,43 +38,29 @@ class QueryResponse(BaseModel):
 
 @app.get("/health")
 def health():
+    collection = get_collection()
+    sources = {m.get("source") for m in collection.get(include=["metadatas"])["metadatas"]}
     return {
         "status": "ok",
-        "docs_in_vault": collection.count()
+        "chunks_indexed": collection.count(),
+        "notes_indexed": len(sources),
     }
 
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
-    question = req.question.strip()
+    # Sync endpoint: FastAPI runs it in a worker thread, so the blocking
+    # embedding + ChromaDB calls don't stall the event loop.
+    try:
+        hits = retrieve(req.question, req.top_k)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if not question:
-        raise HTTPException(status_code=400, detail="Question cannot be empty")
-
-    embedding = model.encode(question).tolist()
-
-    results = collection.query(
-        query_embeddings=[embedding],
-        n_results=req.top_k,
-        include=["documents", "metadatas", "distances"]
+    return QueryResponse(
+        question=req.question.strip(),
+        results=[
+            ResultItem(source=h.source, title=h.title, folder=h.folder, chunk=h.chunk,
+                       distance=h.distance, content=h.text[:500])
+            for h in hits
+        ],
     )
-
-    items = []
-
-    for doc, meta, dist in zip(
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0]
-    ):
-        items.append(
-            ResultItem(
-                source=meta.get("source", ""),
-                filename=meta.get("filename", ""),
-                folder=meta.get("folder", ""),
-                distance=round(float(dist), 4),
-                content=doc[:500]
-            )
-        )
-
-    return QueryResponse(question=question, results=items)
-

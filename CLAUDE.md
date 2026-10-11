@@ -58,9 +58,10 @@ All commands run inside WSL Ubuntu in `~/rag-engine` (verified 2026-10-11). `C:\
 From a Windows shell: `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu --cd /home/user/rag-engine -- bash -s <<'EOF' ... EOF`
 - Setup: `python3 -m venv venv && venv/bin/pip install -r requirements.txt` (CPU-only torch)
 - Config: copy `.env.example` to `.env`; env vars override it (see `config.py`)
-- Ingest / re-index: `venv/bin/python ingest.py` (writes chroma_db; ask first)
+- Ingest / re-index: `venv/bin/python ingest.py [--dry-run]` (idempotent; deletes stale chunks — dry-run first)
 - Run API: `venv/bin/uvicorn api:app --reload --port 8000` → `GET /health`, `POST /query {"question": "...", "top_k": 3}` (startup ~17s)
-- CLI query: `venv/bin/python query.py` (interactive; type `quit` to exit)
+- CLI query: `venv/bin/python query.py "question"` (no arg = interactive)
+- Retrieval eval: `venv/bin/python eval_retrieval.py --live` (temp indexes; live DB read only)
 - Tests: `venv/bin/python -m pytest -q`
 - Ollama: runs on Windows; not reachable from WSL yet (NAT networking)
 
